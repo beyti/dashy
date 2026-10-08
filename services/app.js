@@ -39,6 +39,7 @@ const aliasTarget = require('./endpoints/alias-target'); // Resolves /<alias> to
 const { apiEnabledGate, apiErrorHandler, createApiRouter } = require('./endpoints/api'); // Opt-in REST API
 
 const { loadOidcSettings, createOidcMiddleware, maybeBootstrapConfig } = require('./utils/auth-oidc');
+const { setupPersonalization } = require('./personalization'); // Per-user overrides (ENABLE_USER_OVERRIDES)
 
 /* Service endpoint URL paths (see also serviceEndpoints in src/utils/config/defaults.js) */
 const ENDPOINTS = {
@@ -50,6 +51,7 @@ const ENDPOINTS = {
   systemInfo: '/system-info',
   corsProxy: '/cors-proxy',
   getUser: '/get-user',
+  personal: '/api/me',
   configSchema: '/schema.json',
   openSearch: '/opensearch.xml',
   api: '/api',
@@ -195,6 +197,25 @@ const authIsConfigured = Boolean(
 );
 const guestAccessOn = Boolean(initialAuthConfig?.enableGuestAccess);
 
+/* Which server-verified identity source is active, mirrors getAuthMiddleware() precedence */
+function getAuthMode(authConfig) {
+  if (oidcSettings) return 'oidc';
+  if (process.env.ENABLE_HTTP_AUTH && authConfig.users?.length) return 'basic-conf';
+  if (process.env.BASIC_AUTH_USERNAME && process.env.BASIC_AUTH_PASSWORD) return 'basic-env';
+  if (authConfig.enableHeaderAuth && authConfig.headerAuth) return 'header';
+  return 'none';
+}
+
+/* Null unless ENABLE_USER_OVERRIDES=true. DB migrations run here, before listening */
+const personalization = setupPersonalization({
+  authMode: getAuthMode(initialAuthConfig),
+  oidcSettings,
+  headerName: initialAuthConfig.headerAuth?.userHeader || 'Remote-User',
+  protectConfig,
+});
+const passThrough = (req, res, next) => next();
+const diskWriteGate = personalization ? personalization.diskWriteGate : passThrough;
+
 /* Dashy's own login page is client-side, so users[] gates access even without ENABLE_HTTP_AUTH */
 const anyLoginConfigured = authIsConfigured || Boolean(initialAuthConfig.users?.length);
 
@@ -234,14 +255,18 @@ const proxyEndpointsGate = (req, res, next) => {
 
 const app = express()
   .get(ENDPOINTS.health, (req, res) => {
-    res.set('Cache-Control', 'no-store').status(200).json({
-      status: 'ok',
+    const dbOk = personalization ? personalization.isHealthy() : undefined;
+    res.set('Cache-Control', 'no-store').status(dbOk === false ? 503 : 200).json({
+      status: dbOk === false ? 'degraded' : 'ok',
       uptime: Math.round(process.uptime()),
       version: appVersion,
+      ...(personalization ? { database: dbOk ? 'ok' : 'error' } : {}),
     });
   })
   // Load SSL redirection middleware
   .use(sslServer.middleware)
+  // Per-user dashboard overrides, has its own auth + body limits (no-op unless enabled)
+  .use(ENDPOINTS.personal, personalization ? personalization.router : passThrough)
   // Load middlewares for parsing JSON, and supporting HTML5 history routing
   .use(express.json({ limit: '1mb' }))
   .use((req, res, next) => { if (req.body === undefined) req.body = {}; next(); })
@@ -278,7 +303,7 @@ const app = express()
     }
   }))
   // POST Endpoint used to save config, by writing config file to disk
-  .use(ENDPOINTS.save, protectConfig, requireAdmin, method('POST', (req, res) => {
+  .use(ENDPOINTS.save, diskWriteGate, protectConfig, requireAdmin, method('POST', (req, res) => {
     if (config?.appConfig?.preventWriteToDisk) {
       return res.status(403).json({ error: 'Editing config has been disabled by your administrator' });
     }
@@ -326,7 +351,7 @@ const app = express()
     }
   }))
   // REST API for reading / writing config files (no-op 404 unless ENABLE_API=true)
-  .use(ENDPOINTS.api, apiEnabledGate, createApiRouter({
+  .use(ENDPOINTS.api, apiEnabledGate, diskWriteGate, createApiRouter({
     protectConfig,
     requireAdmin,
     authIsConfigured,
@@ -351,11 +376,12 @@ const app = express()
     const ymlFile = req.path.split('/').pop();
     const userDataDir = path.resolve(rootDir, process.env.USER_DATA_DIR || 'user-data');
     const filePath = path.resolve(userDataDir, ymlFile);
+    const isRootConfig = ymlFile.toLowerCase() === 'conf.yml';
     if (authIsConfigured) {
       res.set('Cache-Control', 'private, no-store').set('Vary', 'Authorization');
       try {
         const stripped = maybeBootstrapConfig(filePath, {
-          isRootConfig: ymlFile === 'conf.yml',
+          isRootConfig,
           isAuthenticated: Boolean(req.auth),
           guestAccessOn,
         });
@@ -367,6 +393,17 @@ const app = express()
       // Not authenticated, not main conf.yml
       if (!req.auth && !guestAccessOn) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+    }
+    // With personalization, sections are only served (authorized + merged) by /api/me/dashboard
+    if (personalization && isRootConfig) {
+      res.set('Cache-Control', 'private, no-store').set('Vary', 'Authorization');
+      try {
+        const { sections: _sections, ...shell } = yaml.load(fs.readFileSync(filePath, 'utf8')) || {};
+        return res.type('text/yaml').send(yaml.dump({ ...shell, _personalization: { enabled: true } }));
+      } catch (e) {
+        printWarning('Failed to read or parse conf.yml', e);
+        return safeEnd(res, errBody('Could not read config'), 500);
       }
     }
     res.sendFile(ymlFile, { root: userDataDir }, (err) => {

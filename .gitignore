@@ -5,6 +5,9 @@ node_modules
 # Dashy config backups
 user-data/config-backups/
 
+# Personal overrides SQLite DB (local dev default location)
+/data/
+
 # local env files
 .env.local
 .env.*.local

@@ -102,6 +102,7 @@ export default {
         if (!this.isAddNew) {
           const live = this.$store.getters.getSectionByName(this.sectionName);
           if (live?.items) payload.items = live.items;
+          if (live?.stableId) payload.stableId = live.stableId;
           this.$store.commit(StoreKeys.UPDATE_SECTION, { sectionName: this.sectionName, sectionData: payload });
         } else {
           this.$store.commit(StoreKeys.INSERT_SECTION, payload);

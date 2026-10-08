@@ -15,14 +15,21 @@
       </ul>
       <!-- Edit Options -->
       <ul class="menu-section" :class="{ disabled: !isEditAllowed }">
-        <li @click="openEditSectionMenu">
-          <EditIcon />
-          <span>{{ $t('context-menus.section.edit-section') }}</span>
-        </li>
-        <li v-if="isEditMode" @click="removeSection">
+        <!-- Company sections (personalized mode) can only be hidden for the current user -->
+        <li v-if="companySection" @click="removeSection">
           <BinIcon />
-          <span>{{ $t('context-menus.section.remove-section') }}</span>
+          <span>{{ $t('personal-dashboard.hide-for-me') }}</span>
         </li>
+        <template v-else>
+          <li @click="openEditSectionMenu">
+            <EditIcon />
+            <span>{{ $t('context-menus.section.edit-section') }}</span>
+          </li>
+          <li v-if="isEditMode" @click="removeSection">
+            <BinIcon />
+            <span>{{ $t('context-menus.section.remove-section') }}</span>
+          </li>
+        </template>
       </ul>
     </div>
   </transition>
@@ -47,6 +54,7 @@ export default {
     posX: { type: Number, default: 0 }, // The X coordinate for positioning
     posY: { type: Number, default: 0 }, // The Y coordinate for positioning
     show: Boolean, // Should show or hide the menu
+    companySection: Boolean, // Centrally-managed section, in personalized mode: hide only
   },
   emits: ['navigateToSection', 'openEditSection', 'expandCollapseSection', 'removeSection'],
   computed: {

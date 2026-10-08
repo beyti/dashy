@@ -57,6 +57,12 @@ COPY --from=build /app/server.js ./server.js
 COPY --from=build /app/package.json ./package.json
 COPY --chown=node:node --from=build /app/user-data/conf.yml ./user-data/conf.yml
 
+# Personal overrides DB (fork feature, only used when ENABLE_USER_OVERRIDES=true).
+# Mount a named volume here; it must never live in the image layer
+RUN mkdir -p /app/data && chown 1000:1000 /app/data && chmod 750 /app/data
+ENV DATABASE_PATH=/app/data/tools.sqlite
+VOLUME ["/app/data"]
+
 USER 1000:1000
 
 EXPOSE 8080

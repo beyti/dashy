@@ -71,7 +71,7 @@
         @editWidget="openEditWidget(widgetIndx)"
         @removeWidget="confirmRemoveWidget(widgetIndx)"
       />
-      <span v-if="isEditMode" class="add-widget-launcher" @click="openAddWidget">
+      <span v-if="isEditMode && !isPersonalized" class="add-widget-launcher" @click="openAddWidget">
         <AddIcon /> {{ $t('interactive-editor.edit-widget.add-widget-btn') }}
       </span>
     </div>
@@ -94,6 +94,7 @@
       :posX="contextPos.posX"
       :posY="contextPos.posY"
       :id="`context-menu-${groupId}`"
+      :companySection="isCompanySection"
       v-click-outside="closeContextMenu"
       @openEditSection="openEditSection"
       @navigateToSection="navigateToSection"
@@ -144,6 +145,7 @@ import { reorder } from '@/directives/DragSort';
 import { makeRoutePath, viewFromPath } from '@/utils/config/ConfigHelpers';
 import StoreKeys from '@/utils/StoreMutations';
 import { sortOrder as defaultSortOrder } from '@/utils/config/defaults';
+import { isCompanyEntry } from '@/utils/personalization/OverridesAdapter';
 
 /* True if both lists contain the same elements, in the same order (compared by runtime id) */
 const sameIdOrder = (a, b) => a.length === b.length && a.every((el, i) => el.id === b[i].id);
@@ -198,6 +200,13 @@ export default {
     },
     isEditMode() {
       return this.$store.state.editMode;
+    },
+    isPersonalized() {
+      return this.$store.getters.isPersonalized;
+    },
+    /* Company (conf.yml) sections can only be hidden, never edited, in personalized mode */
+    isCompanySection() {
+      return this.isPersonalized && isCompanyEntry(this.storeSection);
     },
     itemSize() {
       return this.displayData.itemSize || this.$store.getters.iconSize;
@@ -289,6 +298,11 @@ export default {
     },
     /* Open the Section Edit Menu */
     openEditSection() {
+      if (this.isCompanySection) {
+        this.$toast(this.$t('personal-dashboard.company-locked'));
+        this.closeContextMenu();
+        return;
+      }
       this.editMenuOpen = true;
       this.$store.commit(StoreKeys.SET_MODAL_OPEN, true);
       this.closeContextMenu();
@@ -300,7 +314,22 @@ export default {
     /* Deletes current section, in local state */
     removeSection() {
       this.closeContextMenu();
+      if (this.isCompanySection) { this.hideCompanySection(); return; }
       this.showRemoveConfirm = true;
+    },
+    /* Hides a company section for this user. Outside the editor, saves straight away */
+    async hideCompanySection() {
+      const wasEditing = this.isEditMode;
+      this.$store.commit(StoreKeys.REMOVE_SECTION, { sectionName: this.title });
+      if (wasEditing) return;
+      const result = await this.$store.dispatch(StoreKeys.SAVE_PERSONAL_DASHBOARD);
+      if (result.ok) {
+        this.$toast.success(this.$t('personal-dashboard.save-success'));
+        return;
+      }
+      const message = result.conflict ? this.$t('personal-dashboard.conflict-title') : result.message;
+      this.$toast.error(this.$t('personal-dashboard.save-error', { message }));
+      this.$store.dispatch('refreshPersonalDashboard');
     },
     confirmRemoveSection() {
       this.$store.commit(StoreKeys.REMOVE_SECTION, { sectionName: this.title });
@@ -323,6 +352,7 @@ export default {
     },
     /* Open edit modal for an existing widget */
     openEditWidget(widgetIndx) {
+      if (this.isPersonalized) return; // Widgets are company-managed in personalized mode
       this.editingWidgetIndex = widgetIndx;
       this.addingWidget = false;
       this.editWidgetMenuOpen = true;
@@ -341,6 +371,7 @@ export default {
       this.addingWidget = false;
     },
     confirmRemoveWidget(widgetIndx) {
+      if (this.isPersonalized) return;
       this.pendingRemoveWidgetIndex = widgetIndx;
       this.showRemoveWidgetConfirm = true;
     },

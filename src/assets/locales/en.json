@@ -591,5 +591,38 @@
       "version": "version",
       "wasted": "wasted"
     }
+  },
+  "personal-dashboard": {
+    "save-btn": "Save My Dashboard",
+    "save-tooltip": "Save your personal layout. Only you will see these changes, on any device",
+    "saving": "Saving...",
+    "save-success": "Your dashboard has been saved",
+    "save-error": "Could not save your dashboard: {message}. Your changes are still here, try again.",
+    "retry": "Retry",
+    "reset-btn": "Reset My Dashboard",
+    "reset-tooltip": "Remove all your personal links and changes, and return to the company defaults",
+    "reset-confirm": "This removes all your personal links, hidden items and ordering, and shows the latest company defaults. This cannot be undone.",
+    "reset-success": "Your dashboard has been reset to the company defaults",
+    "reset-error": "Could not reset your dashboard: {message}",
+    "hidden-btn": "Hidden Items ({count})",
+    "hidden-tooltip": "See and restore company links and sections you have hidden",
+    "hidden-title": "Hidden company items",
+    "hidden-none": "You have not hidden any company links or sections.",
+    "hidden-pending": "Selected items will be restored when you save.",
+    "unhide": "Restore",
+    "undo-unhide": "Keep hidden",
+    "cancel-btn": "Cancel",
+    "cancel-tooltip": "Discard unsaved changes",
+    "conflict-title": "Dashboard changed on another device",
+    "conflict-message": "Your dashboard was saved somewhere else since you started editing. Overwrite it with your current changes, or discard your changes and load the latest version?",
+    "conflict-overwrite": "Overwrite with my changes",
+    "conflict-reload": "Discard my changes & reload",
+    "conflict-keep": "Keep editing",
+    "subtitle": "Personalize your dashboard",
+    "description": "Add your own links and sections, hide company links you don't need, and drag to reorder. Company links are managed centrally.",
+    "hide-for-me": "Hide for me",
+    "company-badge": "Company",
+    "personal-badge": "Mine",
+    "company-locked": "Company links and sections are managed centrally. You can hide them for yourself."
   }
 }

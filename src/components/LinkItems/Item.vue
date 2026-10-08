@@ -51,7 +51,11 @@
       <!-- URL of the item (shown on hover, only on some themes) -->
       <p class="item-url">{{ shortUrl(item.url) }}</p>
       <!-- Edit icon (displayed only when in edit mode) -->
-      <EditModeIcon v-if="isEditMode" class="edit-mode-item" @click="openItemSettings()" />
+      <EditModeIcon v-if="isEditMode && !isCompanyItem" class="edit-mode-item" @click="openItemSettings()" />
+      <!-- Personalized mode: show who owns each link, only while editing -->
+      <span v-if="ownershipBadge" :class="`ownership-badge ${isCompanyItem ? 'company' : 'personal'}`">
+        {{ ownershipBadge }}
+      </span>
     </a>
     <!-- Right-click context menu -->
     <ContextMenu
@@ -60,6 +64,7 @@
       :posX="contextPos.posX"
       :posY="contextPos.posY"
       :id="`context-menu-${item.id}`"
+      :companyItem="isCompanyItem"
       @launchItem="launchItem"
       @openItemSettings="openItemSettings"
       @openMoveItemMenu="openMoveItemMenu"
@@ -86,6 +91,7 @@ import StoreKeys from '@/utils/StoreMutations';
 import ItemMixin from '@/mixins/ItemMixin';
 import EditModeIcon from '@/assets/interface-icons/interactive-editor-edit-mode.svg';
 import { modalNames } from '@/utils/config/defaults';
+import { isCompanyEntry } from '@/utils/personalization/OverridesAdapter';
 
 export default {
   name: 'Item',
@@ -107,6 +113,14 @@ export default {
     EditModeIcon,
   },
   computed: {
+    /* Company (conf.yml) links can only be hidden, never edited, in personalized mode */
+    isCompanyItem() {
+      return this.$store.getters.isPersonalized && !this.isAddNew && isCompanyEntry(this.item);
+    },
+    ownershipBadge() {
+      if (!this.isEditMode || this.isAddNew || !this.$store.getters.isPersonalized) return '';
+      return this.$t(this.isCompanyItem ? 'personal-dashboard.company-badge' : 'personal-dashboard.personal-badge');
+    },
     /* Returns either item.icon, or appConfig.defaultIcon, or null */
     itemIcon() {
       return this.item.icon || this.$store.getters.appConfig?.defaultIcon;
@@ -248,6 +262,11 @@ export default {
       return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     },
     openItemSettings() {
+      if (this.isCompanyItem) {
+        this.$toast(this.$t('personal-dashboard.company-locked'));
+        this.contextMenuOpen = false;
+        return;
+      }
       this.editMenuOpen = true;
       this.contextMenuOpen = false;
       this.$store.commit(StoreKeys.SET_MODAL_OPEN, true);
@@ -268,6 +287,18 @@ export default {
       const payload = { itemId: this.item.id, sectionName: parentSection.name };
       this.$store.commit(StoreKeys.REMOVE_ITEM, payload);
       this.closeContextMenu();
+      // "Hide for me" outside the editor saves straight away
+      if (this.isCompanyItem && !this.isEditMode) this.saveHideNow();
+    },
+    async saveHideNow() {
+      const result = await this.$store.dispatch(StoreKeys.SAVE_PERSONAL_DASHBOARD);
+      if (result.ok) {
+        this.$toast.success(this.$t('personal-dashboard.save-success'));
+        return;
+      }
+      const message = result.conflict ? this.$t('personal-dashboard.conflict-title') : result.message;
+      this.$toast.error(this.$t('personal-dashboard.save-error', { message }));
+      this.$store.dispatch('refreshPersonalDashboard');
     },
   },
   mounted() {
@@ -420,6 +451,20 @@ export default {
 }
 
 /* Edit icon, visible in edit mode */
+.item .ownership-badge {
+  position: absolute;
+  bottom: 0.2rem;
+  right: 0.2rem;
+  font-size: 0.6rem;
+  padding: 0 0.25rem;
+  border-radius: var(--curve-factor-small, 3px);
+  color: var(--interactive-editor-color);
+  border: 1px solid var(--interactive-editor-color);
+  opacity: 0.8;
+  pointer-events: none;
+  &.personal { border-style: dashed; }
+}
+
 .item .edit-mode-item {
   width: 1rem;
   height: 1rem;
