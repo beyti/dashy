@@ -152,6 +152,7 @@ export default {
       ) && !unneededFields.includes(property);
       Object.keys(this.schema).forEach((property) => {
         const singleRow = this.makeRowData(property);
+        if (property === 'stableId') return; // Owned by conf.yml / the server, never user-editable
         if (isPrimaryField(property)) {
           formData.push(singleRow);
         } else {

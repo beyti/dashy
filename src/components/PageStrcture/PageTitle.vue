@@ -7,7 +7,7 @@
       <h1>{{ title }}</h1>
       <span class="subtitle">{{ description }}</span>
     </div>
-    <EditModeIcon v-if="isEditMode" @click.stop.prevent="editTitle()"
+    <EditModeIcon v-if="isEditMode && !$store.getters.isPersonalized" @click.stop.prevent="editTitle()"
       class="edit-icon" v-tooltip="tooltip()" />
   </router-link>
 </template>
