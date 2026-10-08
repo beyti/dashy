@@ -150,7 +150,7 @@ Results: `yarn test` passes all 725 tests (592 upstream + 133 new). `yarn lint`,
 | 12 | Forged `user_id` and unauthenticated requests are rejected | ✅ | › authentication, forged identities; OIDC and header suites |
 | 13 | Two concurrent saves: the second gets 409 and the UI keeps the draft | ✅ | › concurrency; store + `personal-ui.test.js` |
 | 14 | Malformed, `javascript:`, oversize, invalid-ID and unauthorized-target input is rejected | ✅ | › input validation; `personal-preferences.test.js` |
-| 15 | DB survives restart; migrations and backup/restore work | ✅ process-level | `personal-db.test.js`; manual real-server restart and restore. Container-level test is in BACKLOG (no Docker daemon was available) |
+| 15 | DB survives restart; migrations and backup/restore work | ✅ | `personal-db.test.js`. Also checked in Docker (image `node:24-alpine`, UID 1000, named volume on `/app/data`): data survived `docker rm -f` and a fresh container on the same volume. Backup ran inside the container and restore worked. Conf.yml was mounted read-only, and save-to-disk returned 403 |
 | 16 | Existing Dashy behaviour still works | ✅ | All 592 upstream tests pass; the feature flag is off by default |
 | 17 | Ordinary users can't write conf.yml | ✅ | › global config protection |
 | 18 | Unit, integration and E2E tests | ⚠️ partial | Unit and integration tests are done. Browser E2E isn't: see BACKLOG |

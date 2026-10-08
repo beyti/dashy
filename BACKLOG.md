@@ -9,7 +9,7 @@ Items deliberately deferred from the P0 implementation (see `dashy-personal-over
 ## Verification gaps (P0 criteria covered differently than the PRD describes)
 
 - **Browser-level E2E tests (AC18).** Two accounts × two real browsers against a real IdP. Today this is covered at the HTTP level (`tests/server/personal-api*.test.js`, including real JWT verification against a local JWKS) and at the store level (`tests/unit/personal-store.test.js`, account switch and draft preservation). Add Playwright against staging SSO.
-- **Docker volume test (AC15) in CI.** Persistence across restarts, and backup/restore, were checked against a real `node server.js` process and in unit tests, but not in a container, because Docker wasn't available to the implementing agent. Extend `tests/docker-smoke-test.sh` to: start the container with a named volume → PUT preferences → `docker rm -f` → start a new container on the same volume → GET.
+- **Docker volume test (AC15) in CI.** This passed when run by hand against the built image, but it isn't in CI yet. Add it to `tests/docker-smoke-test.sh`: named volume → PUT preferences → `docker rm -f` → new container → GET, plus backup/restore.
 - **Load test.** The PRD targets p95 < 200 ms with 500 company links and 100 personal links. The merge alone takes under 20 ms per call in unit tests. A real load test on staging hardware (autocannon/k6) is still needed.
 - **Staging SSO check.** Run against the real company IdP: token audience/issuer, group claims for `showForGroups`, and logout/account switch.
 
