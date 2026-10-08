@@ -37,18 +37,25 @@
         <li class="section-title">
           {{ $t('context-menus.item.options-section-title') }}
         </li>
-        <li @click="openSettings()">
-          <EditIcon />
-          <span>{{ $t('context-menus.item.edit-item') }}</span>
-        </li>
-        <li v-if="isEditMode" @click="openMoveMenu()">
-          <MoveIcon />
-          <span>{{ $t('context-menus.item.move-item') }}</span>
-        </li>
-        <li v-if="isEditMode" @click="openDeleteItem()">
+        <!-- Company links (personalized mode) can only be hidden for the current user -->
+        <li v-if="companyItem" @click="openDeleteItem()">
           <BinIcon />
-          <span>{{ $t('context-menus.item.remove-item') }}</span>
+          <span>{{ $t('personal-dashboard.hide-for-me') }}</span>
         </li>
+        <template v-else>
+          <li @click="openSettings()">
+            <EditIcon />
+            <span>{{ $t('context-menus.item.edit-item') }}</span>
+          </li>
+          <li v-if="isEditMode" @click="openMoveMenu()">
+            <MoveIcon />
+            <span>{{ $t('context-menus.item.move-item') }}</span>
+          </li>
+          <li v-if="isEditMode" @click="openDeleteItem()">
+            <BinIcon />
+            <span>{{ $t('context-menus.item.remove-item') }}</span>
+          </li>
+        </template>
       </ul>
     </div>
   </transition>
@@ -84,6 +91,7 @@ export default {
     posY: { type: Number, default: 0 }, // The Y coordinate for positioning
     show: Boolean, // Should show or hide the menu
     disableEdit: Boolean, // Disable editing for certain items
+    companyItem: Boolean, // Centrally-managed link, in personalized mode: hide only
   },
   emits: ['launchItem', 'openItemSettings', 'openMoveItemMenu', 'openDeleteItem'],
   computed: {

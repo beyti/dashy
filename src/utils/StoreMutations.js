@@ -35,6 +35,11 @@ const KEY_NAMES = [
   'CONF_MENU_INDEX',
   'CRITICAL_ERROR_MSG',
   'AUTH_CHANGED',
+  'SET_PERSONAL_STATE',
+  'SET_PENDING_UNHIDE',
+  'LOAD_PERSONAL_DASHBOARD',
+  'SAVE_PERSONAL_DASHBOARD',
+  'RESET_PERSONAL_DASHBOARD',
 ];
 
 // Convert array of key names into an object, and export

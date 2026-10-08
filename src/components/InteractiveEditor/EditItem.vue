@@ -146,12 +146,13 @@ export default {
     makeInitialFormData() {
       const formData = [];
       const requiredFields = ['title', 'description', 'url', 'icon', 'target'];
-      const unneededFields = ['id'];
+      const unneededFields = ['id', 'stableId'];
       const isPrimaryField = (property) => (
         this.item[property] || requiredFields.includes(property)
       ) && !unneededFields.includes(property);
       Object.keys(this.schema).forEach((property) => {
         const singleRow = this.makeRowData(property);
+        if (property === 'stableId') return; // Owned by conf.yml / the server, never user-editable
         if (isPrimaryField(property)) {
           formData.push(singleRow);
         } else {
@@ -233,6 +234,9 @@ export default {
     formatBeforeSave(item) {
       const newItem = item;
       newItem.id = this.itemId;
+      // Stable identity is owned by conf.yml / the server, carry it over untouched
+      if (this.item?.stableId) newItem.stableId = this.item.stableId;
+      else delete newItem.stableId;
       if (newItem.hotkey) newItem.hotkey = parseInt(newItem.hotkey, 10);
       const strToTags = (tags) => {
         const tagArr = (typeof tags === 'string') ? tags.split(',') : tags;

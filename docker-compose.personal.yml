@@ -1,0 +1,32 @@
+# Company deployment with per-user personal dashboards (ENABLE_USER_OVERRIDES)
+# docker compose -f docker-compose.personal.yml up -d --build
+# See docs/personal-overrides.md
+services:
+  dashy:
+    build: .
+    container_name: tools
+    # Bind to localhost only: the trusted HTTPS reverse proxy is the only way in
+    ports:
+      - 127.0.0.1:4000:8080
+    volumes:
+      # Company defaults, managed in Git. Read-only: nothing in the app may write it
+      - ./user-data/conf.yml:/app/user-data/conf.yml:ro
+      # Personal overrides DB. Named volume survives container stop/recreate/upgrade
+      - tools-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - ENABLE_USER_OVERRIDES=true
+      - DATABASE_PATH=/app/data/tools.sqlite
+      # Optional: allowed personal link URL schemes (javascript/data/file are always refused)
+      # - USER_OVERRIDES_URL_SCHEMES=https,http
+    user: "1000:1000"
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'node', '/app/services/healthcheck.js']
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  tools-data:

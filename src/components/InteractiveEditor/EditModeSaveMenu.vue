@@ -1,6 +1,8 @@
 <template>
+  <!-- Personalized deployments save per-user overrides instead of local/disk config -->
+  <PersonalSaveMenu v-if="isPersonalized" />
   <!-- Intro Info -->
-  <div class="edit-mode-bottom-banner">
+  <div v-else class="edit-mode-bottom-banner">
     <div class="edit-banner-section intro-container"  v-if="showEditMsg">
       <p class="section-sub-title edit-mode-intro l-1">
         {{ $t('interactive-editor.menu.edit-mode-subtitle') }}
@@ -120,6 +122,7 @@ import StoreKeys from '@/utils/StoreMutations';
 import EditPageInfo from '@/components/InteractiveEditor/EditPageInfo';
 import EditAppConfig from '@/components/InteractiveEditor/EditAppConfig';
 import EditMultiPages from '@/components/InteractiveEditor/EditMultiPages';
+import PersonalSaveMenu from '@/components/InteractiveEditor/PersonalSaveMenu';
 import { modalNames } from '@/utils/config/defaults';
 import AccessError from '@/components/Configuration/AccessError';
 import SaveLocallyIcon from '@/assets/interface-icons/interactive-editor-save-locally.svg';
@@ -140,6 +143,7 @@ export default {
     EditPageInfo,
     EditAppConfig,
     EditMultiPages,
+    PersonalSaveMenu,
     SaveLocallyIcon,
     SaveToDiskIcon,
     ExportIcon,
@@ -168,6 +172,9 @@ export default {
     },
     isSubConfig() {
       return this.$store.getters.isSubConfig;
+    },
+    isPersonalized() {
+      return this.$store.getters.isPersonalized && !this.isSubConfig;
     },
   },
   methods: {

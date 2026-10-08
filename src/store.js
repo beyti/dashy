@@ -15,6 +15,8 @@ import {
   getUserState,
 } from '@/utils/auth/Auth';
 import { localStorageKeys, theme as defaultTheme } from '@/utils/config/defaults';
+import { deriveOverrides } from '@/utils/personalization/OverridesAdapter';
+import { fetchDashboard, savePreferences, resetPreferences } from '@/utils/personalization/PersonalApi';
 
 const {
   INITIALIZE_CONFIG,
@@ -50,6 +52,11 @@ const {
   CONF_MENU_INDEX,
   CRITICAL_ERROR_MSG,
   AUTH_CHANGED,
+  SET_PERSONAL_STATE,
+  SET_PENDING_UNHIDE,
+  LOAD_PERSONAL_DASHBOARD,
+  SAVE_PERSONAL_DASHBOARD,
+  RESET_PERSONAL_DASHBOARD,
 } = Keys;
 
 const emptyConfig = {
@@ -93,15 +100,17 @@ const patchAppConfigField = (state, key, value, storageKey) => {
   if (storageKey) localStorage.setItem(storageKey, value);
 };
 
- /* Read locally saved configs/overrides from localStorage  */
-function readLocalOverrides(subConfigId) {
+ /* Read locally saved configs/overrides from localStorage
+  * With server-side personalization, structural keys (sections, pages, pageInfo,
+  * appConfig) are ignored so stale browser data can't mask the server result */
+function readLocalOverrides(subConfigId, ignoreStructural = false) {
   const scope = configScope(subConfigId);
   const own = {};
   let hasStructural = false;
 
-  const localAppConfig = readLocal(scope.APP_CONFIG);
-  const localPageInfo = readLocal(scope.PAGE_INFO);
-  const localSections = readLocal(scope.CONF_SECTIONS);
+  const localAppConfig = ignoreStructural ? undefined : readLocal(scope.APP_CONFIG);
+  const localPageInfo = ignoreStructural ? undefined : readLocal(scope.PAGE_INFO);
+  const localSections = ignoreStructural ? undefined : readLocal(scope.CONF_SECTIONS);
 
   const appConfig = {};
   if (localAppConfig && typeof localAppConfig === 'object') {
@@ -127,7 +136,7 @@ function readLocalOverrides(subConfigId) {
     own.sections = localSections;
     hasStructural = true;
   }
-  if (!subConfigId) {
+  if (!subConfigId && !ignoreStructural) {
     const localPages = readLocal(localStorageKeys.CONF_PAGES);
     if (Array.isArray(localPages)) {
       own.pages = localPages;
@@ -140,7 +149,7 @@ function readLocalOverrides(subConfigId) {
 /* Root config with its own local overrides layered on */
 function buildRootEffective(state) {
   const root = state.rootConfig || {};
-  const { own } = readLocalOverrides(null);
+  const { own } = readLocalOverrides(null, isPersonalizedRoot(root));
   return {
     appConfig: { ...(root.appConfig || {}), ...(own.appConfig || {}) },
     pageInfo: { ...(root.pageInfo || {}), ...(own.pageInfo || {}) },
@@ -164,6 +173,11 @@ function mergeWithRoot(root, own) {
   };
 }
 
+/* True when the server serves sections per-user from /api/me (ENABLE_USER_OVERRIDES) */
+function isPersonalizedRoot(root) {
+  return Boolean(root?._personalization?.enabled && !root?._bootstrap);
+}
+
 const store = createStore({
   state: {
     config: {}, // The current config being used, and rendered to the UI (merged runtime view)
@@ -176,6 +190,9 @@ const store = createStore({
     criticalError: null, // Will store a message, if a critical error occurs
     navigateConfToTab: undefined, // Used to switch active tab in config modal
     authRevision: 0, // Bumped on login/logout so auth-dependent getters re-run
+    // Server-side personalization: { revision, baseRevision, preferences, catalog, hidden }
+    personal: null, // Only ever held in memory, never persisted to browser storage
+    pendingUnhide: [], // Company IDs the user chose to restore, applied on next save
   },
   getters: {
     config(state) {
@@ -186,6 +203,9 @@ const store = createStore({
     },
     isSubConfig(state) {
       return !!state.currentConfigInfo.confId;
+    },
+    isPersonalized(state) {
+      return isPersonalizedRoot(state.rootConfig);
     },
     pageInfo(state) {
       if (!state.config) return {};
@@ -244,6 +264,12 @@ const store = createStore({
         perms.allowWriteToDisk = false;
         perms.allowSaveLocally = false;
         perms.allowViewConfig = false;
+      }
+      // Personal dashboards: every signed-in user edits their own layout, saved via /api/me only
+      if (isPersonalizedRoot(state.rootConfig)) {
+        perms.allowWriteToDisk = false;
+        perms.allowSaveLocally = false;
+        perms.allowViewConfig = true;
       }
       return perms;
     },
@@ -436,6 +462,22 @@ const store = createStore({
     },
     [AUTH_CHANGED](state) {
       state.authRevision += 1;
+      // Account switch: drop everything personal so the next navigation refetches for the new user
+      if (isPersonalizedRoot(state.rootConfig) || state.personal) {
+        state.personal = null;
+        state.pendingUnhide = [];
+        state.rootConfig = null;
+        state.config = { ...emptyConfig };
+        state.configSource = {};
+        state.editMode = false;
+      }
+    },
+    [SET_PERSONAL_STATE](state, personal) {
+      state.personal = personal;
+      state.pendingUnhide = [];
+    },
+    [SET_PENDING_UNHIDE](state, ids) {
+      state.pendingUnhide = Array.isArray(ids) ? [...ids] : [];
     },
     /* Set config to rootConfig, by calling initialize with no params */
     async [USE_MAIN_CONFIG]() {
@@ -460,9 +502,16 @@ const store = createStore({
         if (!data.appConfig) data.appConfig = {};
         if (!data.pageInfo) data.pageInfo = {};
         if (!data.sections) data.sections = [];
+        // Personalized deployments: sections come only from the user's merged dashboard
+        let personalFailed = false;
+        if (isPersonalizedRoot(data)) {
+          const personal = await this.dispatch(Keys.LOAD_PERSONAL_DASHBOARD);
+          data.sections = personal ? personal.sections : [];
+          personalFailed = !personal;
+        }
         // Set the state, and return data
         commit(SET_ROOT_CONFIG, data);
-        commit(CRITICAL_ERROR_MSG, null);
+        if (!personalFailed) commit(CRITICAL_ERROR_MSG, null);
         if (!data._bootstrap) sessionStorage.removeItem(SUB_CONFIG_RELOAD_KEY);
         return data;
       } catch (fetchError) {
@@ -487,7 +536,9 @@ const store = createStore({
       try {
         const targetId = subConfigId || null;
         if (!state.rootConfig) await this.dispatch(Keys.INITIALIZE_ROOT_CONFIG);
-        const { hasStructural: rootHasStructural } = readLocalOverrides(null);
+        const { hasStructural: rootHasStructural } = readLocalOverrides(
+          null, isPersonalizedRoot(state.rootConfig),
+        );
         const rootEffective = buildRootEffective(state);
 
         if (!targetId) {
@@ -550,6 +601,72 @@ const store = createStore({
         ErrorHandler('INITIALIZE_CONFIG failed', err);
         return { ...emptyConfig };
       }
+    },
+
+    /* Fetches the caller's merged dashboard. Returns { sections } or null on failure */
+    async [LOAD_PERSONAL_DASHBOARD]({ commit }) {
+      commit(SET_PERSONAL_STATE, null);
+      try {
+        const data = await fetchDashboard();
+        commit(SET_PERSONAL_STATE, {
+          revision: data.preferenceRevision,
+          baseRevision: data.baseRevision,
+          preferences: data.preferences,
+          catalog: data.catalog || [],
+          hidden: data.hidden || { sections: [], links: [] },
+        });
+        return { sections: data.config?.sections || [] };
+      } catch (e) {
+        const status = e.response?.status;
+        if (status === 401) commit(CRITICAL_ERROR_MSG, 'Sign in to load your dashboard');
+        else ErrorHandler('Failed to load personal dashboard', e);
+        return null;
+      }
+    },
+    /* Reloads merged state from the server, replacing anything shown (discards drafts) */
+    async refreshPersonalDashboard({ commit, state }) {
+      const personal = await this.dispatch(Keys.LOAD_PERSONAL_DASHBOARD);
+      if (!personal) return false;
+      commit(SET_ROOT_CONFIG, { ...state.rootConfig, sections: personal.sections });
+      const rootEffective = buildRootEffective(state);
+      commit(SET_CONFIG, rootEffective);
+      commit(SET_CONFIG_SOURCE, rootEffective);
+      return true;
+    },
+    /**
+     * Saves the editor's working copy as override deltas.
+     * opts.overwriteRevision: after a 409, explicitly overwrite that newer revision
+     * Returns { ok } | { ok: false, conflict, currentRevision } | { ok: false, message }
+     * The draft in state.config is left untouched unless the save succeeds.
+     */
+    async [SAVE_PERSONAL_DASHBOARD]({ state }, opts = {}) {
+      if (!state.personal) return { ok: false, message: 'Personal dashboard not loaded' };
+      const preferences = deriveOverrides(state.config.sections, {
+        catalog: state.personal.catalog,
+        preferences: state.personal.preferences,
+        unhide: new Set(state.pendingUnhide),
+      });
+      const expected = Number.isInteger(opts.overwriteRevision)
+        ? opts.overwriteRevision : state.personal.revision;
+      const result = await savePreferences(preferences, expected);
+      if (!result.ok) {
+        return result.status === 409
+          ? { ok: false, conflict: true, currentRevision: result.currentRevision }
+          : { ok: false, message: result.message };
+      }
+      const refreshed = await this.dispatch('refreshPersonalDashboard');
+      return refreshed ? { ok: true } : { ok: false, message: 'Saved, but reloading failed' };
+    },
+    /* Clears all of the caller's overrides, then shows the latest company defaults */
+    async [RESET_PERSONAL_DASHBOARD]({ state }) {
+      const result = await resetPreferences(state.personal?.revision ?? 0);
+      if (!result.ok) {
+        return result.status === 409
+          ? { ok: false, conflict: true, currentRevision: result.currentRevision }
+          : { ok: false, message: result.message };
+      }
+      await this.dispatch('refreshPersonalDashboard');
+      return { ok: true };
     },
 
     /* Apply edited config content (from the YAML editor or the field modals) to the store. */

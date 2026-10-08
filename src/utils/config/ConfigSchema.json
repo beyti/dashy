@@ -1422,6 +1422,12 @@
                   "type": "string",
                   "description": "Unique ID for each item. Generated automatically, shouldn't need to be set manually."
                 },
+                "stableId": {
+                  "title": "Stable ID",
+                  "type": "string",
+                  "pattern": "^(?!usr-)[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "description": "Permanent identifier for this item, independent of title, URL and position. Used by personal dashboard overrides (ENABLE_USER_OVERRIDES). Never reuse or change once published."
+                },
                 "subItems": {
                   "title": "Sub-Items",
                   "type": "array",
@@ -1529,6 +1535,12 @@
             "title": "Filtered Items - temp",
             "type": "array",
             "description": "This attribute will be deprecated in the next release - do not use!"
+          },
+          "stableId": {
+            "title": "Stable ID",
+            "type": "string",
+            "pattern": "^(?!usr-)[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "description": "Permanent identifier for this section, independent of its name and position. Used by personal dashboard overrides (ENABLE_USER_OVERRIDES). Never reuse or change once published."
           }
         }
       }
