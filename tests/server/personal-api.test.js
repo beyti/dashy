@@ -8,12 +8,13 @@ import {
   describe, it, expect, afterAll, beforeEach,
 } from 'vitest';
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
+import { startMongoMemory } from './helpers/mongo-memory';
 
 /* Auth + feature flags are read when app.js loads, so set env first */
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex').toUpperCase();
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dashy-personal-'));
-const dbPath = path.join(tmpDir, 'data', 'tools.sqlite');
 const confFile = path.join(tmpDir, 'conf.yml');
+const mongo = await startMongoMemory();
 
 const baseConfig = () => ({
   pageInfo: { title: 'Company Tools' },
@@ -57,15 +58,16 @@ writeConf(baseConfig());
 process.env.USER_DATA_DIR = tmpDir;
 process.env.ENABLE_HTTP_AUTH = 'true';
 process.env.ENABLE_USER_OVERRIDES = 'true';
-process.env.DATABASE_PATH = dbPath;
+process.env.MONGODB_URI = mongo.uri;
 process.env.ENABLE_API = 'true';
 
 const app = require('../../services/app');
 const { resetBaseConfigCache } = require('../../services/personalization/base-config');
 
-afterAll(() => {
+afterAll(async () => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
-  ['ENABLE_HTTP_AUTH', 'ENABLE_USER_OVERRIDES', 'DATABASE_PATH', 'ENABLE_API'].forEach((k) => delete process.env[k]);
+  ['ENABLE_HTTP_AUTH', 'ENABLE_USER_OVERRIDES', 'MONGODB_URI', 'ENABLE_API'].forEach((k) => delete process.env[k]);
+  await mongo.stop();
 });
 
 const ALICE = ['alice', 'alice-pass'];
@@ -403,18 +405,24 @@ describe('global config protection (AC17)', () => {
 });
 
 describe('operations', () => {
-  it('stores data in the configured DATABASE_PATH and reports DB health', async () => {
-    expect(fs.existsSync(dbPath)).toBe(true);
+  it('connects to the configured MONGODB_URI and reports DB health', async () => {
+    const { MongoClient } = await import('mongodb');
+    const raw = new MongoClient(mongo.uri);
+    await raw.connect();
+    const collections = await raw.db('dashy').listCollections({ name: 'user_preferences' }).toArray();
+    expect(collections).toHaveLength(1);
+    await raw.close();
     const health = await request(app).get('/healthz');
     expect(health.body.database).toBe('ok');
   });
 
   it('never stores passwords or display names', async () => {
     await putPrefs(ALICE, 0, { ...empty(), hiddenGlobalLinkIds: ['link-ado'] });
-    const { DatabaseSync } = await import('node:sqlite');
-    const raw = new DatabaseSync(dbPath);
-    const dump = JSON.stringify(raw.prepare('SELECT * FROM user_preferences').all());
-    raw.close();
+    const { MongoClient } = await import('mongodb');
+    const raw = new MongoClient(mongo.uri);
+    await raw.connect();
+    const dump = JSON.stringify(await raw.db('dashy').collection('user_preferences').find().toArray());
+    await raw.close();
     expect(dump).not.toMatch(/alice-pass|bob-pass/);
   });
 });

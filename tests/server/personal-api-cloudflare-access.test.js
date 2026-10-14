@@ -9,6 +9,7 @@ import {
 } from 'vitest';
 import { dump as yamlDump } from 'js-yaml';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+import { startMongoMemory } from './helpers/mongo-memory';
 
 /* A tiny local stand-in for Cloudflare's /cdn-cgi/access/certs, so assertions are
    verified for real rather than just trusting claims the test hands over */
@@ -19,6 +20,7 @@ let certsUrl;
 let signingKey;
 let rogueKey;
 let app;
+let mongo;
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dashy-personal-cf-access-'));
 
 const sign = (claims, {
@@ -56,17 +58,19 @@ beforeAll(async () => {
       },
     ],
   }));
+  mongo = await startMongoMemory();
   process.env.USER_DATA_DIR = tmpDir;
   process.env.ENABLE_USER_OVERRIDES = 'true';
-  process.env.DATABASE_PATH = path.join(tmpDir, 'tools.sqlite');
+  process.env.MONGODB_URI = mongo.uri;
   app = require('../../services/app');
 });
 
-afterAll(() => {
+afterAll(async () => {
   certsServer?.close();
   fs.rmSync(tmpDir, { recursive: true, force: true });
   delete process.env.ENABLE_USER_OVERRIDES;
-  delete process.env.DATABASE_PATH;
+  delete process.env.MONGODB_URI;
+  await mongo.stop();
 });
 
 const assertion = (token) => ({ 'Cf-Access-Jwt-Assertion': token });

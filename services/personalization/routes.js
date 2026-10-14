@@ -68,8 +68,8 @@ function createPersonalRouter({
   };
 
   /* Reads stored prefs; anything no longer valid for this caller is dropped, never fatal */
-  const loadPreferences = (identity, catalog) => {
-    const record = store.get(identity.key);
+  const loadPreferences = async (identity, catalog) => {
+    const record = await store.get(identity.key);
     if (!record) return { revision: 0, preferences: emptyPreferences() };
     let preferences = emptyPreferences();
     if (record.preferences) {
@@ -100,9 +100,9 @@ function createPersonalRouter({
   });
   router.use(express.json({ limit: BODY_LIMIT, strict: true }));
 
-  router.get('/dashboard', (req, res) => {
+  router.get('/dashboard', async (req, res) => {
     const { base, sections, catalog } = authorizedFor(req.identity);
-    const { revision, preferences } = loadPreferences(req.identity, catalog);
+    const { revision, preferences } = await loadPreferences(req.identity, catalog);
     const merged = mergeDashboard(sections, preferences);
     const { pageInfo, appConfig, pages } = base.config;
     res.json({
@@ -118,28 +118,28 @@ function createPersonalRouter({
     });
   });
 
-  router.get('/preferences', (req, res) => {
+  router.get('/preferences', async (req, res) => {
     const { catalog } = authorizedFor(req.identity);
-    const { revision, preferences, updatedAt } = loadPreferences(req.identity, catalog);
+    const { revision, preferences, updatedAt } = await loadPreferences(req.identity, catalog);
     res.json({
       success: true, revision, preferences, updatedAt: updatedAt || null,
     });
   });
 
-  router.put('/preferences', (req, res) => {
+  router.put('/preferences', async (req, res) => {
     const body = req.body || {};
     const expectedRevision = parseRevision(body.expectedRevision);
     if (expectedRevision === null) return fail(res, 400, 'expectedRevision must be a non-negative integer');
     const { catalog } = authorizedFor(req.identity);
     const preferences = validatePreferences(body.preferences, catalog); // throws 400/403
-    const saved = store.save(req.identity.key, preferences, expectedRevision); // throws 409
+    const saved = await store.save(req.identity.key, preferences, expectedRevision); // throws 409
     return res.json({ success: true, revision: saved.revision, preferences: saved.preferences });
   });
 
-  router.delete('/preferences', (req, res) => {
+  router.delete('/preferences', async (req, res) => {
     const expectedRevision = parseRevision(req.body?.expectedRevision ?? req.query.expectedRevision);
     if (expectedRevision === null) return fail(res, 400, 'expectedRevision must be a non-negative integer');
-    store.remove(req.identity.key, expectedRevision);
+    await store.remove(req.identity.key, expectedRevision);
     return res.json({ success: true, revision: 0, preferences: emptyPreferences() });
   });
 

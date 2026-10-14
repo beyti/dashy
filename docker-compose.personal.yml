@@ -11,12 +11,13 @@ services:
     volumes:
       # Company defaults, managed in Git. Read-only: nothing in the app may write it
       - ./user-data/conf.yml:/app/user-data/conf.yml:ro
-      # Personal overrides DB. Named volume survives container stop/recreate/upgrade
-      - tools-data:/app/data
     environment:
       - NODE_ENV=production
       - ENABLE_USER_OVERRIDES=true
-      - DATABASE_PATH=/app/data/tools.sqlite
+      # Required: an existing MongoDB instance (e.g. Atlas). Set via a real secret at
+      # deploy time, not committed here - this placeholder will fail to connect on purpose
+      - MONGODB_URI=mongodb://set-me-at-deploy-time/
+      # - MONGODB_DB_NAME=dashy
       # Optional: allowed personal link URL schemes (javascript/data/file are always refused)
       # - USER_OVERRIDES_URL_SCHEMES=https,http
     user: "1000:1000"
@@ -27,6 +28,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-volumes:
-  tools-data:
