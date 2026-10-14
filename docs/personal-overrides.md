@@ -40,7 +40,8 @@ The server stores only each user's *override deltas*, never a copy of the compan
    ```
    In CI, `node services/personalization/assign-stable-ids.js user-data/conf.yml --check` fails if any ID is missing or duplicated.
 2. **Configure server-side authentication.** OIDC/Keycloak is recommended. See [Authentication requirements](#authentication-requirements).
-3. **Deploy** with a persistent volume for `/app/data`:
+3. **Provision a MongoDB database** (Atlas, or any MongoDB 5+ instance) reachable from where the app runs. This is required - the app refuses to start with `ENABLE_USER_OVERRIDES=true` and no `MONGODB_URI`. Unlike the SQLite file this feature used before, Mongo isn't pod-local state, so the app has no single-replica or storage-class constraints: it works the same on a single Docker host or a multi-replica k8s Deployment.
+4. **Deploy**:
    ```bash
    docker compose -f docker-compose.personal.yml up -d --build
    ```
@@ -50,12 +51,11 @@ The server stores only each user's *override deltas*, never a copy of the compan
 | Variable | Default | Purpose |
 |---|---|---|
 | `ENABLE_USER_OVERRIDES` | unset (off) | Turns the feature on. |
-| `DATABASE_PATH` | `/app/data/tools.sqlite` in Docker, `./data/tools.sqlite` otherwise | SQLite file. Must be on a local persistent volume, not a network filesystem. |
+| `MONGODB_URI` | none (required when the feature is on) | Connection string for the preferences database. |
+| `MONGODB_DB_NAME` | `dashy` | Database name on that connection. |
 | `USER_OVERRIDES_URL_SCHEMES` | `https,http` | Allowed URL schemes for personal links. `javascript`, `data`, `file`, `vbscript` and `blob` are always refused. |
 | `USER_OVERRIDES_MAX_BODY` | `64kb` | Max request body for `/api/me/*`. Larger bodies get 413. |
 | `ALLOW_CONFIG_DISK_WRITES` | unset | While the feature is on, upstream "Save to Disk" and `ENABLE_API` writes return 403. Set to `true` only if you deliberately want UI/API edits of `conf.yml`. |
-
-It needs Node 22.22+ (built-in `node:sqlite`, no extra dependency). Node 22 prints an ExperimentalWarning; the Docker image uses Node 24.
 
 ## Stable IDs in conf.yml
 
@@ -209,50 +209,43 @@ Validation is in `services/personalization/preferences.js`:
 
 ## Database
 
-```sql
-CREATE TABLE user_preferences (
-  identity_key TEXT PRIMARY KEY,           -- issuer \u0000 subject
-  schema_version INTEGER NOT NULL DEFAULT 1,
-  revision INTEGER NOT NULL DEFAULT 1,     -- optimistic concurrency
-  preferences_json TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-) STRICT;
+A single MongoDB collection, `user_preferences`, in the database named by `MONGODB_DB_NAME`:
+
+```js
+{
+  identityKey: String,       // issuer '\u0000' subject - unique index
+  schemaVersion: Number,
+  revision: Number,          // optimistic concurrency
+  preferencesJson: String,   // opaque JSON; see "Preferences schema" above
+  createdAt: Date,
+  updatedAt: Date,
+}
 ```
 
-**Pragmas:** WAL journal, `busy_timeout=5000`, `foreign_keys=ON`, `synchronous=NORMAL`.
+`preferences` is stored as a JSON string rather than a native subdocument: `linkOrderBySection`'s
+keys are stableIds, and stableIds allow `.` - unsafe as a literal BSON field name. The app never
+queries inside preferences server-side, so nothing is lost by keeping it opaque.
 
-**Queries:** all are prepared statements. Revision checks and writes run inside `BEGIN IMMEDIATE`.
+**Writes:** no transactions - every write only ever touches the one document for the caller's
+own identity. Revision checks are atomic compare-and-set (`updateOne` matching the expected
+`revision`, or `insertOne` relying on the unique index to reject a concurrent first write).
 
-**Migrations:**
-- They live in `services/personalization/migrations.js`. The list is append-only and tracked in `schema_migrations`.
-- They run synchronously at startup, before the server listens.
-- If the DB comes from a newer app version, startup fails, so a rollback can't corrupt data.
+**Index:** `{ identityKey: 1 }`, unique, created on startup (idempotent - safe to run on every
+boot, including across multiple replicas starting concurrently).
 
-**File permissions:** the DB file is created with mode `0600`, inside a `0750` directory owned by UID 1000.
+**Schema version:** unlike the old single-writer SQLite file, this collection can be read by
+multiple app versions at once during a rolling deploy, so there's no startup-time version ratchet.
+A per-document `schemaVersion` newer than this app understands just degrades that one document to
+empty preferences (logged, not fatal) rather than refusing to boot.
 
-**Deployment:** one container instance only (a single writer). Don't put the DB on NFS/SMB.
+**Deployment:** no replica or storage-class constraints - this is exactly why personalization
+moved off pod-local SQLite. Any number of app replicas can point at the same MongoDB.
 
 ## Backup and restore
 
-**Backup** (safe while the app is running; uses `VACUUM INTO`, never a raw copy of a live WAL database):
-```bash
-docker compose -f docker-compose.personal.yml exec dashy node services/personalization/backup.js
-# -> /app/data/backups/tools-<timestamp>.sqlite
-docker compose -f docker-compose.personal.yml cp dashy:/app/data/backups ./backups
-```
-
-Treat backups as personal data: restrict their file permissions and storage access.
-
-**Restore:**
-```bash
-docker compose -f docker-compose.personal.yml stop dashy
-docker run --rm -v <project>_tools-data:/data -v "$PWD/backups:/b" alpine \
-  sh -c 'rm -f /data/tools.sqlite-wal /data/tools.sqlite-shm && cp /b/tools-<timestamp>.sqlite /data/tools.sqlite && chown 1000:1000 /data/tools.sqlite'
-docker compose -f docker-compose.personal.yml start dashy
-```
-
-This flow is covered by `tests/server/personal-db.test.js`. It was also run by hand against a real `node server.js` process: save → backup → change → restart → restore.
+Backups are MongoDB's job, not the app's: use your provider's point-in-time/continuous backups
+(e.g. Atlas), or `mongodump`/`mongorestore` against the `user_preferences` collection directly.
+There's no app-level backup script for this store.
 
 ## Operations runbook
 
@@ -263,14 +256,11 @@ This flow is covered by `tests/server/personal-db.test.js`. It was also run by h
   
   Users see the tool on their next page load.
 - **Renaming or retiring a tool:** edit the title/URL and keep the ID, or delete the entry. Never reassign an ID to a different tool.
-- **Upgrading the app:**
-  1. Back up the DB first.
-  2. Deploy to staging with a copy of production data and confirm the migrations log (`Applied DB migration ...`).
-  3. Then roll out to production.
-  
-  To roll back, restore the pre-upgrade backup if a migration changed the schema.
-- **Logging:** errors and migrations are logged. Preference payloads, tokens and URLs are not.
-- **Restarting or recreating the container:** data lives in the `tools-data` named volume, which survives `docker compose down` (without `-v`), image rebuilds and upgrades.
+- **Upgrading the app:** deploy to staging with a copy of production data first, since the
+  database is shared, external state rather than something recreated per container.
+- **Logging:** errors are logged. Preference payloads, tokens and URLs are not.
+- **Restarting or recreating the container:** no impact - the data lives in MongoDB, not in the
+  container, so this is safe on any number of replicas and any Docker/k8s restart or reschedule.
 
 ## Security model
 

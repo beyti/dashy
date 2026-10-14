@@ -5,6 +5,7 @@ import path from 'path';
 import request from 'supertest';
 import { describe, it, expect, afterAll } from 'vitest';
 import { dump as yamlDump } from 'js-yaml';
+import { startMongoMemory } from './helpers/mongo-memory';
 
 /* Header auth where the test client is NOT the trusted proxy: identity headers must be ignored */
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dashy-personal-header-'));
@@ -12,17 +13,19 @@ fs.writeFileSync(path.join(tmpDir, 'conf.yml'), yamlDump({
   appConfig: { auth: { enableHeaderAuth: true, headerAuth: { userHeader: 'Remote-User', proxyWhitelist: ['10.9.9.9'] } } },
   sections: [{ name: 'A', stableId: 'sec-a', items: [] }],
 }));
+const mongo = await startMongoMemory();
 process.env.USER_DATA_DIR = tmpDir;
 process.env.ENABLE_USER_OVERRIDES = 'true';
-process.env.DATABASE_PATH = path.join(tmpDir, 'tools.sqlite');
+process.env.MONGODB_URI = mongo.uri;
 
 const app = require('../../services/app');
 const { resolveIdentity } = require('../../services/personalization/identity');
 
-afterAll(() => {
+afterAll(async () => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
   delete process.env.ENABLE_USER_OVERRIDES;
-  delete process.env.DATABASE_PATH;
+  delete process.env.MONGODB_URI;
+  await mongo.stop();
 });
 
 describe('trusted proxy header auth', () => {

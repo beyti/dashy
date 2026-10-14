@@ -1,17 +1,13 @@
 /**
  * Enterprise personalization (fork feature), off unless ENABLE_USER_OVERRIDES=true
- * Wires the SQLite store, /api/me router, and the hardening hooks used by app.js.
+ * Wires the MongoDB-backed store, /api/me router, and the hardening hooks used by app.js.
  * See docs/personal-overrides.md
  */
-const path = require('path');
 const { openStore } = require('./db');
 const { getBaseConfig } = require('./base-config');
 const { createPersonalRouter } = require('./routes');
 
 const isEnabled = () => process.env.ENABLE_USER_OVERRIDES === 'true';
-
-const defaultDbPath = () => process.env.DATABASE_PATH
-  || path.resolve(__dirname, '..', '..', 'data', 'tools.sqlite');
 
 const warn = (msg) => console.warn(`\x1b[103m\x1b[34m[personalization] ${msg}\x1b[0m`);
 
@@ -30,8 +26,12 @@ function setupPersonalization(opts) {
     warn('Personal overrides are keyed on the HTTP basic-auth username. Prefer OIDC for stable identities.');
   }
 
-  // Migrations run here, synchronously, before the app can serve any traffic
-  const store = openStore(defaultDbPath());
+  if (!process.env.MONGODB_URI) {
+    throw new Error('ENABLE_USER_OVERRIDES is on but MONGODB_URI is not set.');
+  }
+  // Connection + index creation happen in the background; requests that arrive before
+  // it's ready simply await the same readiness promise inside the store's own methods
+  const store = openStore(process.env.MONGODB_URI, { dbName: process.env.MONGODB_DB_NAME || 'dashy' });
   try { getBaseConfig(); } catch (e) { warn(`Could not load conf.yml: ${e.message}`); }
 
   const router = createPersonalRouter({

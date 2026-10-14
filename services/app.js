@@ -272,8 +272,8 @@ const proxyEndpointsGate = (req, res, next) => {
 };
 
 const app = express()
-  .get(ENDPOINTS.health, (req, res) => {
-    const dbOk = personalization ? personalization.isHealthy() : undefined;
+  .get(ENDPOINTS.health, async (req, res) => {
+    const dbOk = personalization ? await personalization.isHealthy() : undefined;
     res.set('Cache-Control', 'no-store').status(dbOk === false ? 503 : 200).json({
       status: dbOk === false ? 'degraded' : 'ok',
       uptime: Math.round(process.uptime()),
