@@ -1,33 +1,258 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Lissy93/dashy/master/src/utils/config/ConfigSchema.json
 appConfig:
-  theme: colorful
+  theme: nord
   language: en
+  layout: masonry
+  iconSize: medium
+  statusCheck: true
 pageInfo:
-  title: Dashy
-  description: Welcome to your new dashboard!
+  title: Tıkla Gelsin
+  description: Company dashboard - quick access to all our tools
   navLinks:
-    - title: GitHub
-      path: https://github.com/Lissy93/dashy
-    - title: Documentation
-      path: https://dashy.to/docs
+    - title: Service Status
+      path: https://status.tiklagelsin.com/
+    - title: Azure DevOps
+      path: https://dev.azure.com/tiklagelsin/TG-PROJECT
+
 sections:
-  - name: DevOps
-    stableId: sec-devops
+  - name: Products
+    stableId: sec-products
+    icon: fas fa-shopping-cart
     items:
-      - title: grafana
-        stableId: link-devops-grafana
-        icon: grafana
-        url: http://www.grafana.com
-      - title: elk
-        stableId: link-devops-elk
-        icon: elastic
-        url: http://www.elk.com
-  - name: analytics
+      - title: Tıkla Gelsin Web
+        stableId: link-tiklagelsin-web
+        description: Main consumer site
+        subItems:
+          - title: Prod
+            url: https://www.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#c0392b"
+          - title: Test
+            url: https://www-n.apps.tiklagelsin.com/
+            color: "#1a1a1a"
+            backgroundColor: "#f1c40f"
+      - title: Dev Docs
+        stableId: link-tiklagelsin-dev-docs
+        icon: fas fa-book
+        url: https://developer.tiklagelsin.com/
+        description: Developer-facing API docs
+      - title: Partner
+        stableId: link-partner
+        icon: fas fa-handshake
+        url: https://partner.tiklagelsin.com/
+      - title: Segmental
+        stableId: link-segmental
+        icon: fas fa-layer-group
+        url: https://segmental.tiklagelsin.com/
+
+  - name: Customer Success
+    stableId: sec-customer-success
+    icon: fas fa-headset
+    items:
+      - title: Lead Gelsin
+        stableId: link-lead-gelsin
+        icon: fas fa-bullhorn
+        url: https://lead.tiklagelsin.com/
+        description: Sales
+      - title: Image Gelsin
+        stableId: link-image-gelsin
+        icon: fas fa-camera
+        url: https://imagegelsin.tiklagelsin.com/
+        description: Onboarding
+
+  - name: Analytics
     stableId: sec-analytics
-    icon: analytic
+    icon: fas fa-chart-line
     items:
-      - title: live metrics
-        stableId: link-analytics-live-metrics
-        icon: metric
-        url: http://www.livemetrics.com
+      - title: TG Ticket
+        stableId: link-tg-ticket
+        icon: fas fa-ticket
+        url: https://tg-ticket.tiklagelsin.com/
+      - title: Live Metrics
+        stableId: link-live-metrics
+        icon: fas fa-chart-line
+        url: https://livemetrics.tiklagelsin.com/
+      - title: Firebase Console
+        stableId: link-firebase-console
+        icon: si-firebase
+        url: https://console.firebase.google.com/
+
+  - name: Devops
+    stableId: sec-devops
+    icon: fas fa-server
+    items:
+      - title: ArgoCD
+        stableId: link-argocd
+        description: CI&CD
+        subItems:
+          - title: Prod
+            url: http://argocd-prod.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#c0392b"
+          - title: Test
+            url: http://argocd-test.k8s.azure.tiklagelsin.com/
+            color: "#1a1a1a"
+            backgroundColor: "#f1c40f"
+          - title: Dev
+            url: http://argocd-dev.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#27ae60"
+      - title: Azure DevOps
+        stableId: link-azure-devops
+        icon: fas fa-infinity
+        url: https://dev.azure.com/tiklagelsin/TG-PROJECT
+      - title: N8N
+        stableId: link-n8n
+        icon: si-n8n
+        url: https://n8n.tiklagelsin.com/
+        description: Orchestration
+      - title: Redis Insight - B2B
+        stableId: link-redis-insight-b2b
+        subItems:
+          - title: Prod
+            url: http://redisinsight.b2b.prod.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#c0392b"
+          - title: Test
+            url: http://redisinsight.b2b.test.k8s.azure.tiklagelsin.com/
+            color: "#1a1a1a"
+            backgroundColor: "#f1c40f"
+          - title: Dev
+            url: http://redisinsight.b2b.dev.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#27ae60"
+      - title: Redis Insight
+        stableId: link-redis-insight
+        subItems:
+          - title: Prod
+            url: http://redisinsight.prod.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#c0392b"
+          - title: Test
+            url: http://redisinsight.test.k8s.azure.tiklagelsin.com/
+            color: "#1a1a1a"
+            backgroundColor: "#f1c40f"
+          - title: Dev
+            url: http://redisinsight.dev.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#27ae60"
+
+  - name: Devops - Monitoring
+    stableId: sec-devops-monitoring
+    icon: fas fa-heartbeat
+    items:
+      - title: Service Status
+        stableId: link-service-status
+        icon: fas fa-signal
+        url: https://status.tiklagelsin.com/
+      - title: Monitoring
+        stableId: link-monitoring
+        icon: fas fa-heartbeat
+        url: https://monitoring.tiklagelsin.com/
+      - title: Kibana
+        stableId: link-kibana
+        icon: si-kibana
+        url: http://kibana-prod.azure.tiklagelsin.com/
+      - title: Grafana
+        stableId: link-grafana
+        subItems:
+          - title: Prod
+            url: http://grafana.prod.k8s.azure.tiklagelsin.com/dashboards
+            color: "#ffffff"
+            backgroundColor: "#c0392b"
+          - title: Test
+            url: http://grafana.test.k8s.azure.tiklagelsin.com/dashboards
+            color: "#1a1a1a"
+            backgroundColor: "#f1c40f"
+          - title: Dev
+            url: http://grafana.dev.k8s.azure.tiklagelsin.com/dashboards
+            color: "#ffffff"
+            backgroundColor: "#27ae60"
+      - title: Grafana - Sipariş
+        stableId: link-grafana-siparis
+        icon: si-grafana
+        url: http://siparis.grafana.azure.tiklagelsin.com:3000/
+      - title: Datadog
+        stableId: link-datadog
+        icon: si-datadog
+        url: https://app.datadoghq.eu/
+
+  - name: Dev Tools
+    stableId: sec-devtools
+    icon: fas fa-toolbox
+    items:
+      - title: Web Components
+        stableId: link-web-components
+        icon: fas fa-cubes
+        url: https://web-components.tiklagelsin.com/
+        description: UI
+      - title: Release Planner
+        stableId: link-release-planner
+        icon: fas fa-calendar-check
+        url: https://releaseplanner.tiklagelsin.com/
+        description: Testing
+      - title: Weblate
+        stableId: link-weblate
+        icon: si-weblate
+        url: https://weblate.tiklagelsin.com/
+        description: UI / localization
+      - title: Kafka Akhq
+        stableId: link-kafka-akhq
+        subItems:
+          - title: Prod
+            url: http://akhq.prod.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#c0392b"
+          - title: Test
+            url: http://akhq.test.k8s.azure.tiklagelsin.com/
+            color: "#1a1a1a"
+            backgroundColor: "#f1c40f"
+          - title: Dev
+            url: http://akhq.dev.k8s.azure.tiklagelsin.com/
+            color: "#ffffff"
+            backgroundColor: "#27ae60"
+      - title: MongoDB Atlas
+        stableId: link-mongodb-atlas
+        icon: si-mongodb
+        url: https://cloud.mongodb.com/
+        description: Data
+      - title: Azure Portal
+        stableId: link-azure-portal
+        icon: fas fa-cloud
+        url: https://portal.azure.com/#home
+
+  - name: Management
+    stableId: sec-management
+    icon: fas fa-briefcase
+    items:
+      - title: Budget
+        stableId: link-budget
+        icon: fas fa-coins
+        url: https://budget.tiklagelsin.com/
+        description: Accounting & Finance
+      - title: OKR
+        stableId: link-okr
+        icon: fas fa-bullseye
+        url: https://wokr.twiser.com/okr
+        description: HR
+      - title: Masraf
+        stableId: link-masraf
+        icon: fas fa-receipt
+        url: https://web.flovo.app/#home
+        description: HR - expense claims
+      - title: HR İzin, Evrak Talep
+        stableId: link-hr-izin-evrak
+        icon: fas fa-file-signature
+        url: https://me.layersup.com/tr
+        description: HR - leave & document requests
+
+  - name: Support
+    stableId: sec-support
+    icon: fas fa-life-ring
+    items:
+      - title: ATP Service Now
+        stableId: link-atp-service-now
+        icon: fas fa-clipboard-check
+        url: https://atptech.service-now.com/servis
+
 pages: []
