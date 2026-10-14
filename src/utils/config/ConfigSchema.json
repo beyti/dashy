@@ -759,6 +759,33 @@
                 }
               }
             },
+            "enableCloudflareAccess": {
+              "title": "Enable Cloudflare Access?",
+              "type": "boolean",
+              "default": false,
+              "description": "If set to true, trust Cloudflare Access's signed identity assertion. See appConfig.auth.cloudflareAccess"
+            },
+            "cloudflareAccess": {
+              "type": "object",
+              "description": "Configuration for Cloudflare Zero Trust Access. The server verifies the Cf-Access-Jwt-Assertion token's signature against your team's published keys, so it only works when the app is actually unreachable except through Access",
+              "additionalProperties": false,
+              "required": [
+                "teamDomain",
+                "aud"
+              ],
+              "properties": {
+                "teamDomain": {
+                  "title": "Team Domain",
+                  "type": "string",
+                  "description": "Your Cloudflare Zero Trust team name, e.g. 'tiklagelsin' for tiklagelsin.cloudflareaccess.com"
+                },
+                "aud": {
+                  "title": "Application Audience (AUD) Tag",
+                  "type": "string",
+                  "description": "The AUD tag of the Access application protecting this app, from the Access application's Overview tab in the Cloudflare Zero Trust dashboard"
+                }
+              }
+            },
             "enableKeycloak": {
               "title": "Enable Keycloak?",
               "type": "boolean",

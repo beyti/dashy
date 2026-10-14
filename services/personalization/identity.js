@@ -19,21 +19,22 @@ function claimsToGroupsRoles(claims, oidcSettings) {
 
 /**
  * @param req Express request, after the auth middleware ran
- * @param ctx { mode: 'oidc'|'basic-conf'|'basic-env'|'header'|'none', oidcSettings, headerName }
+ * @param ctx { mode: 'oidc'|'cloudflare-access'|'basic-conf'|'basic-env'|'header'|'none', oidcSettings, headerName }
  * @returns { key, username, groups, roles } or null when unauthenticated
  */
 function resolveIdentity(req, ctx) {
   const auth = req.auth;
   if (!auth || typeof auth !== 'object') return null;
 
-  if (ctx.mode === 'oidc') {
+  if (ctx.mode === 'oidc' || ctx.mode === 'cloudflare-access') {
     const { claims } = auth;
     if (!claims || typeof claims.iss !== 'string' || typeof claims.sub !== 'string'
       || !claims.iss || !claims.sub) return null;
     return {
       key: `${claims.iss}\u0000${claims.sub}`,
-      username: String(auth.user || claims.sub),
-      ...claimsToGroupsRoles(claims, ctx.oidcSettings),
+      username: String(auth.user || claims.email || claims.sub),
+      // Cloudflare Access doesn't embed group/role claims the way OIDC does
+      ...(ctx.mode === 'oidc' ? claimsToGroupsRoles(claims, ctx.oidcSettings) : { groups: [], roles: [] }),
     };
   }
 
