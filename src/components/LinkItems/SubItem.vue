@@ -11,11 +11,12 @@
       rel="noopener noreferrer" tabindex="0"
       :id="`link-${id}`"
       class="sub-item-link item"
+      :style="customStyle"
     >
       <!-- Item Icon (shows title as fallback when no icon) -->
       <Icon v-if="item.icon" :icon="item.icon" :url="item.url"
       size="small" v-bind:style="customStyles" class="sub-icon-img bounce" />
-      <span v-else class="sub-item-text">{{ item.title }}</span>
+      <span v-else class="sub-item-text" :style="customStyle">{{ item.title }}</span>
     </a>
     <!-- Right-click context menu -->
     <ContextMenu
