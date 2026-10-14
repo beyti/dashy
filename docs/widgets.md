@@ -192,7 +192,7 @@ A simple, live-updating local weather component, showing temperature, conditions
 
 ### Weather Forecast
 
-Displays the weather (temperature and conditions) for the next few days for a given location. Note that this requires either the free [OpenWeatherMap Student Plan](https://home.openweathermap.org/students), or the Premium Plan.
+Displays the weather (temperature and conditions) for the next few days for a given location.
 
 <p align="center"><img width="400" src="https://pixelflare.cc/alicia/dashy/weather-forecast" /></p>
 
@@ -200,12 +200,12 @@ Displays the weather (temperature and conditions) for the next few days for a gi
 
 **Field** | **Type** | **Required** | **Description**
 --- | --- | --- | ---
-**`apiKey`** | `string` |  Required | Your OpenWeatherMap API key. You can get one at [openweathermap.org](https://openweathermap.org/) or for free via the [OWM Student Plan](https://home.openweathermap.org/students)
+**`apiKey`** | `string` |  Required | Your OpenWeatherMap API key. You can get one for free at [openweathermap.org](https://openweathermap.org/)
 **`city`** | `string` | Required | A city name to use for fetching weather. This can also be a state code or country code, following the ISO-3166 format
 **`cityId`** | `number` |  _Optional_ | An OpenWeatherMap numeric city ID, used to disambiguate cities that share a name. You can find the ID in the URL of the city's page on [openweathermap.org](https://openweathermap.org/) (e.g. `2643743` for London, GB). If provided, this will override the `city` option
 **`lat`** | `number` |  _Optional_ | Latitude for a specific location. If provided alongside `lon`, this will override the `city` and `cityId` options
 **`lon`** | `number` |  _Optional_ | Longitude for a specific location. If provided alongside `lat`, this will override the `city` and `cityId` options
-**`numDays`** | `number` |  _Optional_ | The number of days to display of forecast info to display. Defaults to `4`, max `16` days
+**`numDays`** | `number` |  _Optional_ | The number of days to display of forecast info to display. Defaults to `6`, and the free API covers about 5 days ahead
 **`units`** | `string` |  _Optional_ | The units to use for displaying data, can be either `metric` or `imperial`. Defaults to `metric`
 **`hideDetails`** | `boolean` |  _Optional_ | If set to `true`, the additional details (wind, humidity, pressure, etc) will not be shown. Defaults to `false`
 
@@ -224,7 +224,7 @@ Displays the weather (temperature and conditions) for the next few days for a gi
 
 - **CORS**: 🟢 Enabled
 - **Auth**: 🔴 Required
-- **Price**: 🔴 Premium (free for personal use only)
+- **Price**: 🟠 Free plan
 - **Privacy**: _See [OWM Privacy Policy](https://openweather.co.uk/privacy-policy)_
 
 ---
@@ -3734,13 +3734,13 @@ Then set `DASHY_WEATHER_TOKEN='xxx'` in your container or local environment, and
 
 ### Setting Timeout
 
-If the endpoint you are requesting data from is slow to respond, you may see a timeout error in the console. This can easily be fixed by specifying the `timeout` property on the offending widget. This should be an integer value, in milliseconds. By default timeout is `2500` ms (2½ seconds).
+If the endpoint you are requesting data from is slow to respond, you may see a timeout error in the console. This can easily be fixed by specifying the `timeout` property on the offending widget. This should be an integer value, in milliseconds. By default timeout is `50000` ms (50 seconds).
 
 For example:
 
 ```yaml
 - type: gl-current-cpu
-  timeout: 8000
+  timeout: 90000
   options:
     hostname: https://glances.dns-device.local
 ```

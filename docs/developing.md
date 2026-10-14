@@ -73,8 +73,7 @@ You can set variables either in your environment, or using the [`.env`](https://
 - `NODE_ENV` - Current environment, can be either development, production or test
 - `PORT` - The port to expose the running application on
 - `HOST` - The host that Dashy is running on, domain or IP
-- `BASE_URL` - The default base path for serving up static assets
-- `VITE_APP_DOMAIN` - Usually the same as BASE_URL, but accessible in frontend
+- `VITE_APP_DOMAIN` - The address of Dashy's server, if it's not the same as where the frontend is served from
 - `INTEGRITY` - Should enable SRI for build script and link resources
 - `IS_DOCKER` - Computed automatically on build. Indicates if running in container
 - `VITE_APP_VERSION` - Again, set automatically using package.json during build time

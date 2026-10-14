@@ -441,6 +441,9 @@
     "ignore-button": "Kritik Hataları Yoksay"
   },
   "widgets": {
+    "apod": {
+      "watch-video": "Videoyu izle"
+    },
     "general": {
       "show-more": "Ayrıntıları Genişlet",
       "cpu-details": "CPU Detayları",
