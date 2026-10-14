@@ -81,7 +81,7 @@ The following example shows creating a config, publishing it as a [Gist](https:/
 
 ### Restrictions
 
-Only top-level fields supported by sub-pages are `pageInfo` and `sections`. The `appConfig` and `pages` will always be inherited from your main `conf.yml` file. Other than that, sub-pages behave exactly the same as your default view, and can contain sections, items, widgets and page info like nav links, title and logo.
+Sub-pages support the top-level `pageInfo`, `sections` and `appConfig` fields. A sub-page's `appConfig` is merged over your main one, so you only need the settings you want to change, like `theme` or `layout`. `appConfig.auth` and `pages` always come from your main `conf.yml` file. Other than that, sub-pages behave exactly the same as your default view, and can contain sections, items, widgets and page info like nav links, title and logo.
 
 ### URL Structure
 

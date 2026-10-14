@@ -30,6 +30,7 @@ let config = require('./utils/config-validator'); // Validate config file and lo
 const statusCheck = require('./endpoints/status-check'); // Used by the status check feature, uses GET
 const pingCheck = require('./endpoints/ping-check'); // Used by the ping check feature, uses GET
 const saveConfig = require('./endpoints/save-config'); // Saves users new conf.yml to file-system
+const serveConfig = require('./endpoints/serve-config'); // Serves conf.yml and other YAML, behind auth
 const systemInfo = require('./endpoints/system-info'); // Basic system info, for resource widget
 const sslServer = require('./utils/ssl-server'); // TLS-enabled web server
 const corsProxy = require('./endpoints/cors-proxy'); // Enables API requests to CORS-blocked services
@@ -38,7 +39,7 @@ const openSearch = require('./endpoints/opensearch'); // Descriptor for browser 
 const aliasTarget = require('./endpoints/alias-target'); // Resolves /<alias> to an item's URL
 const { apiEnabledGate, apiErrorHandler, createApiRouter } = require('./endpoints/api'); // Opt-in REST API
 
-const { loadOidcSettings, createOidcMiddleware, maybeBootstrapConfig } = require('./utils/auth-oidc');
+const { loadOidcSettings, createOidcMiddleware } = require('./utils/auth-oidc');
 const { setupPersonalization } = require('./personalization'); // Per-user overrides (ENABLE_USER_OVERRIDES)
 
 /* Service endpoint URL paths (see also serviceEndpoints in src/utils/config/defaults.js) */
@@ -151,6 +152,9 @@ function getAuthMiddleware(authConfig, oidcSettings) {
   if (oidcSettings) {
     return createOidcMiddleware(oidcSettings);
   } else if (useConfAuth) {
+    if (authConfig.enableGuestAccess) {
+      printWarning('Guest access is not supported with ENABLE_HTTP_AUTH');
+    }
     return basicAuth({
       authorizer: customAuthorizer,
       challenge: true,
@@ -370,46 +374,18 @@ const app = express()
       safeEnd(res, errBody(e), 500);
     }
   })
-  // Middleware to serve any .yml/.yaml files in USER_DATA_DIR with optional protection
-  // Note: returns stripped version if auth configured but not yet authenticated
-  .get(/\.ya?ml$/i, bootstrapAuth, (req, res) => {
-    const ymlFile = req.path.split('/').pop();
-    const userDataDir = path.resolve(rootDir, process.env.USER_DATA_DIR || 'user-data');
-    const filePath = path.resolve(userDataDir, ymlFile);
-    const isRootConfig = ymlFile.toLowerCase() === 'conf.yml';
-    if (authIsConfigured) {
-      res.set('Cache-Control', 'private, no-store').set('Vary', 'Authorization');
-      try {
-        const stripped = maybeBootstrapConfig(filePath, {
-          isRootConfig,
-          isAuthenticated: Boolean(req.auth),
-          guestAccessOn,
-        });
-        if (stripped) return res.type('text/yaml').send(stripped);
-      } catch (e) {
-        printWarning(`Failed to read or parse ${ymlFile}`, e);
-        return safeEnd(res, errBody('Could not read config'), 500);
-      }
-      // Not authenticated, not main conf.yml
-      if (!req.auth && !guestAccessOn) {
-        return res.status(401).json({ success: false, message: 'Unauthorized' });
-      }
-    }
-    // With personalization, sections are only served (authorized + merged) by /api/me/dashboard
-    if (personalization && isRootConfig) {
-      res.set('Cache-Control', 'private, no-store').set('Vary', 'Authorization');
-      try {
-        const { sections: _sections, ...shell } = yaml.load(fs.readFileSync(filePath, 'utf8')) || {};
-        return res.type('text/yaml').send(yaml.dump({ ...shell, _personalization: { enabled: true } }));
-      } catch (e) {
-        printWarning('Failed to read or parse conf.yml', e);
-        return safeEnd(res, errBody('Could not read config'), 500);
-      }
-    }
-    res.sendFile(ymlFile, { root: userDataDir }, (err) => {
-      if (err) safeEnd(res, errBody(`Could not read ${ymlFile}`), 404);
-    });
-  })
+  // Serves .yml/.yaml files in USER_DATA_DIR, with optional protection
+  .use(serveConfig({
+    bootstrapAuth,
+    authIsConfigured,
+    guestAccessOn,
+    // With personalization, sections are only served (authorized + merged) by /api/me/dashboard -
+    // the static route must never hand back the full, unfiltered company section list
+    stripSections: personalization ? (filePath) => {
+      const { sections: _sections, ...shell } = yaml.load(fs.readFileSync(filePath, 'utf8')) || {};
+      return yaml.dump({ ...shell, _personalization: { enabled: true } });
+    } : null,
+  }))
   // Serves up static files
   .use(express.static(path.resolve(rootDir, process.env.USER_DATA_DIR || 'user-data')))
   .use(express.static(path.join(rootDir, 'dist')))
