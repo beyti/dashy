@@ -40,6 +40,9 @@ const aliasTarget = require('./endpoints/alias-target'); // Resolves /<alias> to
 const { apiEnabledGate, apiErrorHandler, createApiRouter } = require('./endpoints/api'); // Opt-in REST API
 
 const { loadOidcSettings, createOidcMiddleware } = require('./utils/auth-oidc');
+const {
+  loadCloudflareAccessSettings, createCloudflareAccessMiddleware,
+} = require('./utils/auth-cloudflare-access');
 const { setupPersonalization } = require('./personalization'); // Per-user overrides (ENABLE_USER_OVERRIDES)
 
 /* Service endpoint URL paths (see also serviceEndpoints in src/utils/config/defaults.js) */
@@ -133,23 +136,29 @@ function customAuthorizer(username, password) {
 }
 
 /* Pick an auth strategy based on what's configured in conf.yml + env.
-   OIDC / Keycloak takes precedence — it's the strongest enforcement we offer. */
-function getAuthMiddleware(authConfig, oidcSettings) {
+   Cloudflare Access, then OIDC / Keycloak take precedence — they're the strongest,
+   server-verified enforcement we offer. */
+function getAuthMiddleware(authConfig, oidcSettings, cloudflareAccessSettings) {
   const confUsers = authConfig.users || null;
   const hasConfUsers = confUsers && confUsers.length > 0;
   const useConfAuth = process.env.ENABLE_HTTP_AUTH && hasConfUsers;
   const { BASIC_AUTH_USERNAME, BASIC_AUTH_PASSWORD } = process.env;
   const hasStaticCreds = BASIC_AUTH_USERNAME && BASIC_AUTH_PASSWORD;
 
-  // Warn if both auth methods are configured - they don't work together
+  // Warn if multiple auth methods are configured - only one is ever actually enforced
   if (hasStaticCreds && hasConfUsers) {
     printWarning(useConfAuth
       ? 'BASIC_AUTH env vars are ignored because ENABLE_HTTP_AUTH is active with conf.yml users.'
       : 'BASIC_AUTH env vars and appConfig.auth.users are both set but use different credentials.'
         + ' This will cause auth failures. Set ENABLE_HTTP_AUTH=true, or remove users from conf.yml.');
   }
+  if (cloudflareAccessSettings && oidcSettings) {
+    printWarning('Both Cloudflare Access and OIDC/Keycloak are configured; Cloudflare Access takes precedence.');
+  }
 
-  if (oidcSettings) {
+  if (cloudflareAccessSettings) {
+    return createCloudflareAccessMiddleware(cloudflareAccessSettings);
+  } else if (oidcSettings) {
     return createOidcMiddleware(oidcSettings);
   } else if (useConfAuth) {
     if (authConfig.enableGuestAccess) {
@@ -186,15 +195,19 @@ function getAuthMiddleware(authConfig, oidcSettings) {
 
 const initialAuthConfig = loadAuthConfig();
 const oidcSettings = loadOidcSettings(initialAuthConfig);
-const protectConfig = getAuthMiddleware(initialAuthConfig, oidcSettings);
-const bootstrapAuth = oidcSettings
-  ? createOidcMiddleware(oidcSettings, { permissive: true })
-  : protectConfig;
+const cloudflareAccessSettings = loadCloudflareAccessSettings(initialAuthConfig);
+const protectConfig = getAuthMiddleware(initialAuthConfig, oidcSettings, cloudflareAccessSettings);
+const bootstrapAuth = cloudflareAccessSettings
+  ? createCloudflareAccessMiddleware(cloudflareAccessSettings, { permissive: true })
+  : oidcSettings
+    ? createOidcMiddleware(oidcSettings, { permissive: true })
+    : protectConfig;
 
 /* True when any auth method is configured. Used to keep zero-auth deployments
    open (their original behaviour) while closing the gate for everyone else. */
 const authIsConfigured = Boolean(
-  oidcSettings
+  cloudflareAccessSettings
+  || oidcSettings
   || (process.env.ENABLE_HTTP_AUTH && initialAuthConfig.users?.length)
   || (process.env.BASIC_AUTH_USERNAME && process.env.BASIC_AUTH_PASSWORD)
   || (initialAuthConfig.enableHeaderAuth && initialAuthConfig.headerAuth),
@@ -203,6 +216,7 @@ const guestAccessOn = Boolean(initialAuthConfig?.enableGuestAccess);
 
 /* Which server-verified identity source is active, mirrors getAuthMiddleware() precedence */
 function getAuthMode(authConfig) {
+  if (cloudflareAccessSettings) return 'cloudflare-access';
   if (oidcSettings) return 'oidc';
   if (process.env.ENABLE_HTTP_AUTH && authConfig.users?.length) return 'basic-conf';
   if (process.env.BASIC_AUTH_USERNAME && process.env.BASIC_AUTH_PASSWORD) return 'basic-env';
